@@ -119,7 +119,7 @@ ARCHITECTURE:
 
 ### Solver parameters
 
-We would also need to modify the solver settings from what we used on MNIST. 
+We would also need to modify the solver settings from what we used on MNIST.
 
 1. Change the optimizer to SGD + Momentum, with momentum of 0.9.
 2. Initialize the conv and FC weights using a `gaussian(0, 0.01)` initializer, and biases using a `zeros` initializer. You may refer to the Caffe prototxt above for exact details.
@@ -134,7 +134,7 @@ Since we are training a model from scratch on this small dataset, it is importan
 
 #### Q 2.3: Implement the data augmentation and generate the loss and mAP curves as before.
 
-*Hint: You may refer to a previous work, Kra½henu¿½hl et al. (ICLR'16), for more tips on setting hyper-parameters for this task. Feel free to explore slight modifications of the architecture.*
+*Hint: You may refer to a previous work, Krahenbuhl et al. (ICLR'16), for more tips on setting hyper-parameters for this task. Feel free to explore slight modifications of the architecture.*
 
 ## Task 3: Even deeper! VGG-16 for PASCAL classification (15 points)
 
