@@ -103,6 +103,7 @@ ARCHITECTURE:
 	-> conv(3, 1, 384, 'SAME')
 	-> relu()
 	-> conv(3, 1, 384, 'SAME')
+	-> relu()
 	-> conv(3, 1, 256, 'SAME')
 	-> max_pool(3, 2)
 	-> flatten()
