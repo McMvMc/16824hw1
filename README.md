@@ -124,7 +124,7 @@ We would also need to modify the solver settings from what we used on MNIST.
 
 1. Change the optimizer to SGD + Momentum, with momentum of 0.9.
 2. Initialize the conv and FC weights using a `gaussian(0, 0.01)` initializer, and biases using a `zeros` initializer. You may refer to the Caffe prototxt above for exact details.
-3. Use a exponentially decaying learning rate schedule, that starts at 0.001, and decays by 0.5 every 10K iterations. You should train it for at least 40K iterations, which should take half hour on the AWS nodes.
+3. Use a exponentially decaying learning rate schedule, that starts at 0.001, and decays by 0.5 every 10K iterations. You should train it for at least 40K iterations at batch size of 10, which should take half hour on the AWS nodes.
 
 #### Q 2.2: Implement the above solver parameters. This should require small changes to our previous code.
 
