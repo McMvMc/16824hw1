@@ -74,7 +74,7 @@ Next we need to write the model function for PASCAL. I provide an empty function
 
 With all this code in place, we should now be able to train the model. For now we will use the same training parameters as we used for MNIST. The other thing to figure out is the evaluation. A standard metric for multi-label evaluation is [mean average precision (mAP)](http://scikit-learn.org/stable/modules/generated/sklearn.metrics.average_precision_score.html). I already provide the code for evaluation; just make sure your `model_fn` can return an `EstimatorSpec` for the predict mode (it should return the probability for each class).
 
-#### Q 1.3: Same as before, show the training and accuracy (mAP) curves. Train for only 1000 iterations.
+#### Q 1.3: Same as before, show the training loss and test accuracy (mAP) curves. Train for only 1000 iterations.
 
 
 ## Task 2: Lets go deeper! AlexNet for PASCAL classification (20 points)
