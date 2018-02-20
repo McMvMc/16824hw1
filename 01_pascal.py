@@ -57,6 +57,10 @@ def load_pascal(data_dir, split='train'):
         labels (np.ndarray): An array of shape (N, 20) of
             type np.int32, with 0s and 1s; 1s for classes that
             are active in that image.
+        weights: (np.ndarray): An array of shape (N, 20) of
+            type np.int32, with 0s and 1s; 1s for classes that
+            are confidently labeled and 0s for classes that 
+            are ambiguous.
     """
     # Wrote this function
 
