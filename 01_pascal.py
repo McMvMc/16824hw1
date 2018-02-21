@@ -159,7 +159,7 @@ def load_pascal(data_dir, split='train'):
         cls_list = [x.split() for x in cls_list]
         for im_i in range(N):
             labels[im_i,c_i] = int(cls_list[i][1]==1)
-            weight[im_i,c_i] = 1-int(cls_list[i][1]==0)
+            weight[im_i,c_i] = 1-int(cls_list[i][1]<1)
 
     return images, labels
 
