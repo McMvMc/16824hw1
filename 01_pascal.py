@@ -125,13 +125,13 @@ def load_pascal(data_dir, split='train'):
             are active in that image.
         weights: (np.ndarray): An array of shape (N, 20) of
             type np.int32, with 0s and 1s; 1s for classes that
-            are confidently labeled and 0s for classes that 
+            are confidently labeled and 0s for classes that
             are ambiguous.
     """
-    H = 224
-    W = 224
-
     # Write this function
+    H = 256
+    W = 256
+    crop_px = 224
     fp = data_dir+"/ImageSets/Main/"+split+".txt"
     with open(fp) as f:
         f_list = f.readlines()
@@ -141,13 +141,16 @@ def load_pascal(data_dir, split='train'):
     # read images
     images = np.zeros([N,H,W,3])
     for i in range(N):
-        images[i,:,:,:] = cv2.resize(cv2.imread(data_dir
+        images[i,:,:,:] = tf.random_crop(
+                            cv2.resize(cv2.imread(data_dir
                             +'/JPEGImages/'+f_list[i]+'.jpg'),(H,W),
-                            interpolation = cv2.INTER_CUBIC)
+                            interpolation = cv2.INTER_CUBIC),
+                            [crop_px, crop_px, 3])
     # implt = plt.imshow(images[0,:,:,:])
 
     # read class labels
     labels = np.zeros([N,20])
+    weights = np.ones([N,20])
     for c_i in range(20):
         class_fp = data_dir+"/ImageSets/Main/" \
                             +CLASS_NAMES[c_i]+"_"+split+".txt"
@@ -155,7 +158,8 @@ def load_pascal(data_dir, split='train'):
             cls_list = f.readlines()
         cls_list = [x.split() for x in cls_list]
         for im_i in range(N):
-            labels[im_i,c_i] = cls_list[i][1]
+            labels[im_i,c_i] = int(cls_list[i][1]==1)
+            weight[im_i,c_i] = 1-int(cls_list[i][1]==0)
 
     return images, labels
 
