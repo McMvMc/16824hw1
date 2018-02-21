@@ -6,10 +6,10 @@ from __future__ import print_function
 
 # Imports
 import numpy as np
+import matplotlib.pyplot as plt
 import tensorflow as tf
 
 tf.logging.set_verbosity(tf.logging.INFO)
-
 
 def cnn_model_fn(features, labels, mode):
     """Model function for CNN."""
@@ -99,18 +99,44 @@ def main(unused_argv):
         batch_size=100,
         num_epochs=None,
         shuffle=True)
-    mnist_classifier.train(
-        input_fn=train_input_fn,
-        steps=20000,
-        hooks=[logging_hook])
-    # Evaluate the model and print results
-    eval_input_fn = tf.estimator.inputs.numpy_input_fn(
-        x={"x": eval_data},
-        y=eval_labels,
-        num_epochs=1,
-        shuffle=False)
-    eval_results = mnist_classifier.evaluate(input_fn=eval_input_fn)
-    print(eval_results)
+
+    print("session is:")
+    tf.Session(config=tf.ConfigProto(log_device_placement=True))
+
+    # draw
+    iter = 300
+    x = np.multiply(range(iter+1),100.0)
+    acc_arr = np.multiply(range(iter+1),0.0)
+    loss_arr = np.multiply(range(iter+1),0.0)
+    for i in range(iter):
+        mnist_classifier.train(
+            input_fn=train_input_fn,
+            steps=200,
+            hooks=[logging_hook])
+        # Evaluate the model and print results
+        eval_input_fn = tf.estimator.inputs.numpy_input_fn(
+            x={"x": eval_data},
+            y=eval_labels,
+            num_epochs=1,
+            shuffle=False)
+        eval_results = mnist_classifier.evaluate(input_fn=eval_input_fn)
+        acc_arr[i+1] = eval_results["accuracy"]
+        loss_arr[i+1] = eval_results["loss"]
+
+        print("accuracy is: ")
+        print(eval_results)
+
+        plt.clf()
+        fig = plt.figure(1)
+        plt.plot(x, acc_arr)
+        plt.pause(0.0001)
+        fig.savefig("acc.png")
+
+        plt.clf()
+        fig = plt.figure(2)
+        plt.plot(x, loss_arr)
+        plt.pause(0.0001)
+        fig.savefig("loss.png")
 
 
 if __name__ == "__main__":
