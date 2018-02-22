@@ -46,7 +46,7 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
     # Write this function
     """Model function for CNN."""
     # Input Layer
-    input_layer = tf.reshape(features["x"], [-1, 28, 28, 1])
+    input_layer = tf.reshape(features["x"], [-1, 256, 256, 1])
 
     # Convolutional Layer #1
     conv1 = tf.layers.conv2d(
@@ -69,7 +69,7 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
     pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
 
     # Dense Layer
-    pool2_flat = tf.reshape(pool2, [-1, 7 * 7 * 64])
+    pool2_flat = tf.reshape(pool2, [-1, 64 * 64 * 64])
     dense = tf.layers.dense(inputs=pool2_flat, units=1024,
                             activation=tf.nn.relu)
     dropout = tf.layers.dropout(
@@ -83,16 +83,17 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
         "classes": tf.argmax(input=logits, axis=1),
         # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
         # `logging_hook`.
-        "probabilities": tf.nn.softmax(logits, name="softmax_tensor")
+        "probabilities": tf.sigmoid(logits, name="sigmoid_tensor")
     }
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
 
     # Calculate Loss (for both TRAIN and EVAL modes)
-    onehot_labels = tf.one_hot(indices=tf.cast(labels, tf.int32), depth=10)
-    loss = tf.identity(tf.losses.softmax_cross_entropy(
-        onehot_labels=onehot_labels, logits=logits), name='loss')
+    # onehot_labels = tf.one_hot(indices=tf.cast(labels, tf.int32), depth=10)
+    onehot_labels = labels
+    loss = tf.identity(tf.losses.sigmoid_cross_entropy(
+        multi_class_labels=onehot_labels, logits=logits), name='loss')
 
     # Configure the Training Op (for TRAIN mode)
     if mode == tf.estimator.ModeKeys.TRAIN:
@@ -141,11 +142,14 @@ def load_pascal(data_dir, split='train'):
     # read images
     images = np.zeros([N,H,W,3])
     for i in range(N):
-        images[i,:,:,:] = tf.random_crop(
-                            cv2.resize(cv2.imread(data_dir
+        # images[i,:,:,:] = tf.random_crop(
+        #                     cv2.resize(cv2.imread(data_dir
+        #                     +'/JPEGImages/'+f_list[i]+'.jpg'),(H,W),
+        #                     interpolation = cv2.INTER_CUBIC),
+        #                     [crop_px, crop_px, 3])
+        images[i,:,:,:] = cv2.resize(cv2.imread(data_dir
                             +'/JPEGImages/'+f_list[i]+'.jpg'),(H,W),
-                            interpolation = cv2.INTER_CUBIC),
-                            [crop_px, crop_px, 3])
+                            interpolation = cv2.INTER_CUBIC)
     # implt = plt.imshow(images[0,:,:,:])
 
     # read class labels
