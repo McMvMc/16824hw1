@@ -45,7 +45,7 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
     # Write this function
     """Model function for CNN."""
     # Input Layer
-    input_layer = tf.reshape(features["x"], [-1, 256, 256, 1])
+    input_layer = tf.reshape(features["x"], [-1, 256, 256, 3])
 
     # Convolutional Layer #1
     conv1 = tf.layers.conv2d(
@@ -161,8 +161,8 @@ def load_pascal(data_dir, split='train'):
             cls_list = f.readlines()
         cls_list = [x.split() for x in cls_list]
         for im_i in range(N):
-            labels[im_i,c_i] = int(cls_list[i][1]==1)
-            weights[im_i,c_i] = 1-int(cls_list[i][1]<1)
+            labels[im_i,c_i] = int(int(cls_list[im_i][1])==1)
+            weights[im_i,c_i] = int(int(cls_list[im_i][1])!=0)
 
     return images, labels, weights
 
@@ -192,10 +192,10 @@ def main():
 
     args = parse_args()
     # Load training and eval data
-    train_data, train_labels, train_weights = load_pascal(
-        args.data_dir, split='trainval')
     eval_data, eval_labels, eval_weights = load_pascal(
         args.data_dir, split='test')
+    train_data, train_labels, train_weights = load_pascal(
+        args.data_dir, split='trainval')
 
     pascal_classifier = tf.estimator.Estimator(
         model_fn=partial(cnn_model_fn,
@@ -252,7 +252,7 @@ def main():
         acc_arr[i+1] = np.mean(AP)
 
         print("accuracy is: ")
-        print(eval_results)
+        print(np.mean(AP))
 
         plt.clf()
         fig = plt.figure(1)
