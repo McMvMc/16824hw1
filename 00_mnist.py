@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 
 tf.logging.set_verbosity(tf.logging.INFO)
+# logs_path = '/tmp/tensorflow_logs/example/'
 
 def cnn_model_fn(features, labels, mode):
     """Model function for CNN."""
@@ -62,6 +63,8 @@ def cnn_model_fn(features, labels, mode):
     loss = tf.identity(tf.losses.softmax_cross_entropy(
         onehot_labels=onehot_labels, logits=logits), name='loss')
 
+    tf.summary.scalar('training_loss', loss)
+
     # Configure the Training Op (for TRAIN mode)
     if mode == tf.estimator.ModeKeys.TRAIN:
         optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
@@ -80,6 +83,11 @@ def cnn_model_fn(features, labels, mode):
 
 
 def main(unused_argv):
+    print("session is:")
+    tf.Session(config=tf.ConfigProto(log_device_placement=True))
+
+    # summary_writer = tf.summary.SummaryWriter(logs_path, graph=tf.get_default_graph())
+
     # Load training and eval data
     mnist = tf.contrib.learn.datasets.load_dataset("mnist")
     train_data = mnist.train.images  # Returns np.array
@@ -100,9 +108,6 @@ def main(unused_argv):
         num_epochs=None,
         shuffle=True)
 
-    print("session is:")
-    tf.Session(config=tf.ConfigProto(log_device_placement=True))
-
     # draw
     iter = 300
     x = np.multiply(range(iter+1),100.0)
@@ -113,6 +118,7 @@ def main(unused_argv):
             input_fn=train_input_fn,
             steps=200,
             hooks=[logging_hook])
+        # summary_writer.add_summary(summary, epoch * total_batch + i)
         # Evaluate the model and print results
         eval_input_fn = tf.estimator.inputs.numpy_input_fn(
             x={"x": eval_data},

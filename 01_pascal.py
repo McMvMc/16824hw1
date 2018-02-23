@@ -14,7 +14,7 @@ import cv2
 import matplotlib.pyplot as plt
 
 from eval import compute_map
-import models
+# import models
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -40,7 +40,6 @@ CLASS_NAMES = [
     'train',
     'tvmonitor',
 ]
-
 
 def cnn_model_fn(features, labels, mode, num_classes=20):
     # Write this function
@@ -76,7 +75,7 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
         inputs=dense, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
 
     # Logits Layer
-    logits = tf.layers.dense(inputs=dropout, units=10)
+    logits = tf.layers.dense(inputs=dropout, units=20)
 
     predictions = {
         # Generate predictions (for PREDICT and EVAL mode)
@@ -95,6 +94,7 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
     loss = tf.identity(tf.losses.sigmoid_cross_entropy(
         multi_class_labels=onehot_labels, logits=logits), name='loss')
 
+    tf.summary.scalar('training_loss', loss)
     # Configure the Training Op (for TRAIN mode)
     if mode == tf.estimator.ModeKeys.TRAIN:
         optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
@@ -140,21 +140,20 @@ def load_pascal(data_dir, split='train'):
     N = len(f_list)
 
     # read images
-    images = np.zeros([N,H,W,3])
+    images = np.zeros([N,H,W,3],np.float32)
     for i in range(N):
         # images[i,:,:,:] = tf.random_crop(
         #                     cv2.resize(cv2.imread(data_dir
         #                     +'/JPEGImages/'+f_list[i]+'.jpg'),(H,W),
         #                     interpolation = cv2.INTER_CUBIC),
         #                     [crop_px, crop_px, 3])
-        images[i,:,:,:] = cv2.resize(cv2.imread(data_dir
-                            +'/JPEGImages/'+f_list[i]+'.jpg'),(H,W),
-                            interpolation = cv2.INTER_CUBIC)
+        images[i,:,:,:] = Image.open(data_dir +'/JPEGImages/'+f_list[i]
+                                     +'.jpg').resize((W, H), Image.ANTIALIAS)
     # implt = plt.imshow(images[0,:,:,:])
 
     # read class labels
-    labels = np.zeros([N,20])
-    weights = np.ones([N,20])
+    labels = np.zeros([N,20]).astype(int)
+    weights = np.ones([N,20]).astype(int)
     for c_i in range(20):
         class_fp = data_dir+"/ImageSets/Main/" \
                             +CLASS_NAMES[c_i]+"_"+split+".txt"
@@ -163,9 +162,9 @@ def load_pascal(data_dir, split='train'):
         cls_list = [x.split() for x in cls_list]
         for im_i in range(N):
             labels[im_i,c_i] = int(cls_list[i][1]==1)
-            weight[im_i,c_i] = 1-int(cls_list[i][1]<1)
+            weights[im_i,c_i] = 1-int(cls_list[i][1]<1)
 
-    return images, labels
+    return images, labels, weights
 
 
 def parse_args():
@@ -189,6 +188,8 @@ def _get_el(arr, i):
 
 
 def main():
+    BATCH_SIZE = 100
+
     args = parse_args()
     # Load training and eval data
     train_data, train_labels, train_weights = load_pascal(
@@ -210,30 +211,54 @@ def main():
         batch_size=BATCH_SIZE,
         num_epochs=None,
         shuffle=True)
-    pascal_classifier.train(
-        input_fn=train_input_fn,
-        steps=NUM_ITERS,
-        hooks=[logging_hook])
-    # Evaluate the model and print results
-    eval_input_fn = tf.estimator.inputs.numpy_input_fn(
-        x={"x": eval_data, "w": eval_weights},
-        y=eval_labels,
-        num_epochs=1,
-        shuffle=False)
-    pred = list(pascal_classifier.predict(input_fn=eval_input_fn))
-    pred = np.stack([p['probabilities'] for p in pred])
-    rand_AP = compute_map(
-        eval_labels, np.random.random(eval_labels.shape),
-        eval_weights, average=None)
-    print('Random AP: {} mAP'.format(np.mean(rand_AP)))
-    gt_AP = compute_map(
-        eval_labels, eval_labels, eval_weights, average=None)
-    print('GT AP: {} mAP'.format(np.mean(gt_AP)))
-    AP = compute_map(eval_labels, pred, eval_weights, average=None)
-    print('Obtained {} mAP'.format(np.mean(AP)))
-    print('per class:')
-    for cid, cname in enumerate(CLASS_NAMES):
-        print('{}: {}'.format(cname, _get_el(AP, cid)))
+
+    print("session is:")
+    tf.Session(config=tf.ConfigProto(log_device_placement=True))
+
+    # draw
+    total_iters = 1000
+    iter = 20
+    NUM_ITERS = int(total_iters/iter)
+
+    x = np.multiply(range(iter+1),50.0)
+    acc_arr = np.multiply(range(iter+1),0.0)
+    for i in range(iter):
+        pascal_classifier.train(
+            steps=NUM_ITERS,
+            hooks=[logging_hook],
+            input_fn = train_input_fn)
+        # Evaluate the model and print results
+        eval_input_fn = tf.estimator.inputs.numpy_input_fn(
+            x={"x": eval_data, "w": eval_weights},
+            y=eval_labels,
+            num_epochs=1,
+            shuffle=False)
+        pred = list(pascal_classifier.predict(input_fn=eval_input_fn))
+        pred = np.stack([p['probabilities'] for p in pred])
+        rand_AP = compute_map(
+            eval_labels, np.random.random(eval_labels.shape),
+            eval_weights, average=None)
+        print('Random AP: {} mAP'.format(np.mean(rand_AP)))
+        gt_AP = compute_map(
+            eval_labels, eval_labels, eval_weights, average=None)
+        print('GT AP: {} mAP'.format(np.mean(gt_AP)))
+        AP = compute_map(eval_labels, pred, eval_weights, average=None)
+        print('Obtained {} mAP'.format(np.mean(AP)))
+        print('per class:')
+        for cid, cname in enumerate(CLASS_NAMES):
+            print('{}: {}'.format(cname, _get_el(AP, cid)))
+
+        # draw graph
+        acc_arr[i+1] = np.mean(AP)
+
+        print("accuracy is: ")
+        print(eval_results)
+
+        plt.clf()
+        fig = plt.figure(1)
+        plt.plot(x, acc_arr)
+        plt.pause(0.0001)
+        fig.savefig("acc_task1_2.png")
 
 
 if __name__ == "__main__":
