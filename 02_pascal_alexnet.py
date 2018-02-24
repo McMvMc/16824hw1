@@ -12,7 +12,6 @@ from PIL import Image
 from functools import partial
 import cv2
 import matplotlib.pyplot as plt
-import sklearn.metrics
 
 from eval import compute_map
 # import models
@@ -48,35 +47,100 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
     # Input Layer
     input_layer = tf.reshape(features["x"], [-1, 256, 256, 3])
 
-    # Convolutional Layer #1
+    # conv(k, s, n, p)
+    # conv(11, 4, 96, 'VALID')
+    # relu()
     conv1 = tf.layers.conv2d(
         inputs=input_layer,
-        filters=32,
-        kernel_size=[5, 5],
-        padding="same",
+        kernel_size=[11, 11],
+        strides=4,
+        filters=96,
+        padding="valid",
+        kernel_initializer=tf.truncated_normal_initializer(0,0.001),
+        bias_initializer=tf.zeros_initializer(),
         activation=tf.nn.relu)
 
-    # Pooling Layer #1
-    pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2)
+    # max_pool(3, 2)
+    pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[3, 3], strides=2)
 
-    # Convolutional Layer #2 and Pooling Layer #2
+    # conv(5, 1, 256, 'SAME')
+    # relu()
     conv2 = tf.layers.conv2d(
         inputs=pool1,
-        filters=64,
         kernel_size=[5, 5],
+        strides=1,
+        filters=256,
         padding="same",
+        kernel_initializer=tf.truncated_normal_initializer(0,0.001),
+        bias_initializer=tf.zeros_initializer(),
         activation=tf.nn.relu)
-    pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
 
-    # Dense Layer
-    pool2_flat = tf.reshape(pool2, [-1, 64 * 64 * 64])
-    dense = tf.layers.dense(inputs=pool2_flat, units=1024,
+    # max_pool(3, 2)
+    pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[3, 3], strides=2)
+
+    # conv(3, 1, 384, 'SAME')
+    # relu()
+    conv3 = tf.layers.conv2d(
+        inputs=pool2,
+        kernel_size=[3, 3],
+        strides=1,
+        filters=384,
+        padding="same",
+        kernel_initializer=tf.truncated_normal_initializer(0,0.001),
+        bias_initializer=tf.zeros_initializer(),
+        activation=tf.nn.relu)
+
+    # conv(3, 1, 384, 'SAME')
+    # relu()
+    conv4 = tf.layers.conv2d(
+        inputs=conv3,
+        kernel_size=[3, 3],
+        strides=1,
+        filters=384,
+        padding="same",
+        kernel_initializer=tf.truncated_normal_initializer(0,0.001),
+        bias_initializer=tf.zeros_initializer(),
+        activation=tf.nn.relu)
+
+    # conv(3, 1, 256, 'SAME')
+    # relu()
+    conv5 = tf.layers.conv2d(
+        inputs=conv4,
+        kernel_size=[3, 3],
+        strides=1,
+        filters=256,
+        padding="same",
+        kernel_initializer=tf.truncated_normal_initializer(0,0.001),
+        bias_initializer=tf.zeros_initializer(),
+        activation=tf.nn.relu)
+
+    # max_pool(3, 2)
+    pool3 = tf.layers.max_pooling2d(inputs=conv5, pool_size=[3, 3], strides=2)
+
+    # flatten()
+    pool3_flat = tf.reshape(pool3, [int((labels.shape)[0]), -1])
+
+    # fully_connected(4096)
+    # relu()
+    dense1 = tf.layers.dense(inputs=pool3_flat, units=4096,
                             activation=tf.nn.relu)
-    dropout = tf.layers.dropout(
-        inputs=dense, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
 
+    # dropout(0.5)
+    dropout1 = tf.layers.dropout(
+        inputs=dense1, rate=0.5, training=mode == tf.estimator.ModeKeys.TRAIN)
+
+    # fully_connected(4096)
+    # relu()
+    dense2 = tf.layers.dense(inputs=dropout1, units=4096,
+                            activation=tf.nn.relu)
+
+    # dropout(0.5)
+    dropout2 = tf.layers.dropout(
+        inputs=dense2, rate=0.5, training=mode == tf.estimator.ModeKeys.TRAIN)
+
+    # fully_connected(20)
     # Logits Layer
-    logits = tf.layers.dense(inputs=dropout, units=20)
+    logits = tf.layers.dense(inputs=dropout2, units=20)
 
     predictions = {
         # Generate predictions (for PREDICT and EVAL mode)
@@ -98,10 +162,14 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
     tf.summary.scalar('training_loss', loss)
     # Configure the Training Op (for TRAIN mode)
     if mode == tf.estimator.ModeKeys.TRAIN:
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
+        global_step = tf.train.get_global_step()
+        decay_LR = tf.train.exponential_decay(0.01, global_step,
+                                              10000, 0.5, staircase=True)
+        optimizer = tf.train.MomentumOptimizer(learning_rate=decay_LR,
+                                               momentum = 0.9)
         train_op = optimizer.minimize(
             loss=loss,
-            global_step=tf.train.get_global_step())
+            global_step=global_step)
         return tf.estimator.EstimatorSpec(
             mode=mode, loss=loss, train_op=train_op)
 
@@ -109,7 +177,6 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
     eval_metric_ops = {
         "accuracy": tf.metrics.accuracy(
             labels=labels, predictions=predictions["classes"])}
-
     return tf.estimator.EstimatorSpec(
         mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
@@ -140,7 +207,7 @@ def load_pascal(data_dir, split='train'):
         f_list = f.readlines()
     f_list = [x.strip('\n') for x in f_list]
     N = len(f_list)
-
+    N = 300
     # read images
     images = np.zeros([N,H,W,3],np.float32)
     for i in range(N):
@@ -190,8 +257,8 @@ def _get_el(arr, i):
 
 
 def main():
-    BATCH_SIZE = 100
-    PASCAL_MODEL_DIR = "/tmp/pascal_model_scratch"
+    BATCH_SIZE = 10
+    PASCAL_MODEL_DIR = "/tmp/alexnet_model_scratch"
 
     args = parse_args()
     # Load training and eval data
@@ -219,18 +286,10 @@ def main():
     sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
 
     # draw
-    # logs_path = '/tmp/pascal_model_scratch/summary/'
-    # writer = tf.train.SummaryWriter(logs_path, graph=tf.get_default_graph())
-
-    total_iters = 1000
-    iter = 20
+    total_iters = 40000
+    iter = 200
     NUM_ITERS = int(total_iters/iter)
-    # mAP = tf.Variable(0.0, dtype=tf.float32)
-
-    # merged = tf.summary.merge_all()
     mAP_writer = tf.summary.FileWriter(PASCAL_MODEL_DIR+'/train',sess.graph)
-    # sess.run(tf.global_variables_initializer())
-
     x = np.multiply(range(iter+1),50.0)
     acc_arr = np.multiply(range(iter+1),0.0)
     for i in range(iter):
@@ -260,27 +319,21 @@ def main():
             print('{}: {}'.format(cname, _get_el(AP, cid)))
 
         # draw graph
+        summary = tf.Summary(value=[tf.Summary.Value(tag='mean_AP',
+                                                     simple_value=np.mean(AP))])
+        mAP_writer.add_summary(summary, i)
+
         acc_arr[i+1] = np.mean(AP)
 
         print("accuracy is: ")
         print(np.mean(AP))
 
-
-        # meanAP = tf.assign(mAP, np.mean(AP).astype(np.float32))
-        # tf.summary.tensor_summary('mean_AP', mAP)
-        # merged = tf.summary.merge_all()
-        # summary = sess.run(merged)
-        summary = tf.Summary(value=[tf.Summary.Value(tag='mean_AP',
-                                                     simple_value=np.mean(AP))])
-        mAP_writer.add_summary(summary, i)
-
-        # writer
         plt.clf()
         fig = plt.figure(1)
         plt.plot(x, acc_arr)
         plt.pause(0.0001)
         fig.savefig("acc_task1_2.png")
 
-    mAP_writer.close()
+
 if __name__ == "__main__":
     main()
