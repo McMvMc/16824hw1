@@ -5,6 +5,7 @@ from __future__ import print_function
 # Imports
 import sys
 import numpy as np
+import scipy
 import tensorflow as tf
 import argparse
 import os.path as osp
@@ -48,95 +49,179 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
     N = features["x"].shape[0]
     # input_layer = tf.reshape(features["x"], [-1, 256, 256, 3])
 
-    if mode != tf.estimator.ModeKeys.PREDICT:
+    if mode == tf.estimator.ModeKeys.TRAIN:
         crop_layer = [tf.image.random_flip_left_right(
                         tf.image.random_flip_up_down(
                             tf.random_crop(features["x"][0, :, :, :],
                                            [224, 224, 3])
                         ))]
         for i in range(1,N):
-            crop_layer = tf.concat([crop_layer, [
-                            tf.image.random_flip_left_right(
-                                tf.image.random_flip_up_down(
-                                    tf.random_crop(features["x"][i, :, :, :],
-                                                   [224, 224, 3])
-                        ))]], 0)
+            cur_im = tf.image.random_flip_left_right(
+                        tf.image.random_flip_up_down(
+                            tf.random_crop(features["x"][i, :, :, :],
+                                       [224, 224, 3])
+                        ))
+            crop_layer = tf.concat([crop_layer, [cur_im]], 0)
         crop_layer = tf.image.resize_images(crop_layer, [256, 256])
+        tf.summary.image('training_images', crop_layer)
     else:
-        crop_layer = tf.image.resize_images(features["x"], [256,256])
+        crop_layer = features["x"]
+        # crop_layer = tf.image.resize_images(features["x"], [256, 256])
+        # crop_layer = tf.reshape(features["x"], [-1, 256, 256, 3])
 
-    # conv(k, s, n, p)
-    # conv(11, 4, 96, 'VALID')
-    # relu()
+    ##########################
+    # 1
     conv1 = tf.layers.conv2d(
         inputs=crop_layer,
-        kernel_size=[11, 11],
-        strides=4,
-        filters=96,
-        padding="valid",
-        kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
-        bias_initializer=tf.zeros_initializer(),
-        activation=tf.nn.relu)
-
-    # max_pool(3, 2)
-    pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[3, 3], strides=2)
-
-    # conv(5, 1, 256, 'SAME')
-    # relu()
-    conv2 = tf.layers.conv2d(
-        inputs=pool1,
-        kernel_size=[5, 5],
-        strides=1,
-        filters=256,
-        padding="same",
-        kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
-        bias_initializer=tf.zeros_initializer(),
-        activation=tf.nn.relu)
-
-    # max_pool(3, 2)
-    pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[3, 3], strides=2)
-
-    # conv(3, 1, 384, 'SAME')
-    # relu()
-    conv3 = tf.layers.conv2d(
-        inputs=pool2,
         kernel_size=[3, 3],
         strides=1,
-        filters=384,
+        filters=64,
         padding="same",
-        kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
+        # kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
         bias_initializer=tf.zeros_initializer(),
         activation=tf.nn.relu)
+    # 2
+    conv2 = tf.layers.conv2d(
+        inputs=conv1,
+        kernel_size=[3, 3],
+        strides=1,
+        filters=64,
+        padding="same",
+        # kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
+        # bias_initializer=tf.zeros_initializer(),
+        activation=tf.nn.relu)
+    # max 1
+    pool1 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
 
-    # conv(3, 1, 384, 'SAME')
-    # relu()
+    ##########################
+    # 3
+    conv3 = tf.layers.conv2d(
+        inputs=pool1,
+        kernel_size=[3, 3],
+        strides=1,
+        filters=128,
+        padding="same",
+        # kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
+        # bias_initializer=tf.zeros_initializer(),
+        activation=tf.nn.relu)
+    # 4
     conv4 = tf.layers.conv2d(
         inputs=conv3,
         kernel_size=[3, 3],
         strides=1,
-        filters=384,
+        filters=128,
         padding="same",
-        kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
-        bias_initializer=tf.zeros_initializer(),
+        # kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
+        # bias_initializer=tf.zeros_initializer(),
         activation=tf.nn.relu)
+    # max 2
+    pool2 = tf.layers.max_pooling2d(inputs=conv4, pool_size=[2, 2], strides=2)
 
-    # conv(3, 1, 256, 'SAME')
-    # relu()
+    ##########################
+    # 5
     conv5 = tf.layers.conv2d(
-        inputs=conv4,
+        inputs=pool2,
         kernel_size=[3, 3],
         strides=1,
         filters=256,
         padding="same",
-        kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
-        bias_initializer=tf.zeros_initializer(),
+        # kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
+        # bias_initializer=tf.zeros_initializer(),
         activation=tf.nn.relu)
+    # 6
+    conv6 = tf.layers.conv2d(
+        inputs=conv5,
+        kernel_size=[3, 3],
+        strides=1,
+        filters=256,
+        padding="same",
+        # kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
+        # bias_initializer=tf.zeros_initializer(),
+        activation=tf.nn.relu)
+    # 7
+    conv7 = tf.layers.conv2d(
+        inputs=conv6,
+        kernel_size=[3, 3],
+        strides=1,
+        filters=256,
+        padding="same",
+        # kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
+        # bias_initializer=tf.zeros_initializer(),
+        activation=tf.nn.relu)
+    # max 2
+    pool3 = tf.layers.max_pooling2d(inputs=conv7, pool_size=[2, 2], strides=2)
 
-    # max_pool(3, 2)
-    pool3 = tf.layers.max_pooling2d(inputs=conv5, pool_size=[3, 3], strides=2)
+    ##########################
+    # 8
+    conv8 = tf.layers.conv2d(
+        inputs=pool3,
+        kernel_size=[3, 3],
+        strides=1,
+        filters=512,
+        padding="same",
+        # kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
+        # bias_initializer=tf.zeros_initializer(),
+        activation=tf.nn.relu)
+    # 9
+    conv9 = tf.layers.conv2d(
+        inputs=conv8,
+        kernel_size=[3, 3],
+        strides=1,
+        filters=512,
+        padding="same",
+        # kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
+        # bias_initializer=tf.zeros_initializer(),
+        activation=tf.nn.relu)
+    # 10
+    conv10 = tf.layers.conv2d(
+        inputs=conv9,
+        kernel_size=[3, 3],
+        strides=1,
+        filters=512,
+        padding="same",
+        # kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
+        # bias_initializer=tf.zeros_initializer(),
+        activation=tf.nn.relu)
+    # max 2
+    pool4 = tf.layers.max_pooling2d(inputs=conv10, pool_size=[2, 2], strides=2)
+
+
+    ##########################
+    # 11
+    conv11 = tf.layers.conv2d(
+        inputs=pool4,
+        kernel_size=[3, 3],
+        strides=1,
+        filters=512,
+        padding="same",
+        # kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
+        # bias_initializer=tf.zeros_initializer(),
+        activation=tf.nn.relu)
+    # 12
+    conv12 = tf.layers.conv2d(
+        inputs=conv11,
+        kernel_size=[3, 3],
+        strides=1,
+        filters=512,
+        padding="same",
+        # kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
+        # bias_initializer=tf.zeros_initializer(),
+        activation=tf.nn.relu)
+    # 13
+    conv13 = tf.layers.conv2d(
+        inputs=conv12,
+        kernel_size=[3, 3],
+        strides=1,
+        filters=512,
+        padding="same",
+        # kernel_initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01),
+        # bias_initializer=tf.zeros_initializer(),
+        activation=tf.nn.relu)
+    # max 2
+    pool5 = tf.layers.max_pooling2d(inputs=conv13, pool_size=[2, 2], strides=2)
 
     # flatten()
-    pool3_flat = tf.reshape(pool3, [-1, 6*6*256])
+    pool3_flat = tf.reshape(pool5, [-1, 8*8*512])
     # pool3_flat = tf.reshape(pool3, [int((labels.shape)[0]), -1])
 
     # fully_connected(4096)
@@ -178,26 +263,49 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
     loss = tf.identity(tf.losses.sigmoid_cross_entropy(
         multi_class_labels=onehot_labels, logits=logits), name='loss')
 
-    tf.summary.scalar('training_loss', loss)
     # Configure the Training Op (for TRAIN mode)
     if mode == tf.estimator.ModeKeys.TRAIN:
+        tf.summary.scalar('training_loss', loss)
         global_step = tf.train.get_global_step()
         decay_LR = tf.train.exponential_decay(0.001, global_step,
                                               10000, 0.5, staircase=True)
+        tf.summary.scalar('decay_LR', decay_LR)
         optimizer = tf.train.MomentumOptimizer(learning_rate=decay_LR,
                                                momentum = 0.9)
         train_op = optimizer.minimize(
             loss=loss,
             global_step=global_step)
+
+        # plot histogram of gradients
+        train_summary =[]
+        grads_and_vars = optimizer.compute_gradients(loss)
+        # tf.summary.histogram("grad_histogram",grads_and_vars)
+        for g, v in grads_and_vars:
+            if g is not None:
+                # print(format(v.name))
+                grad_hist_summary = tf.summary.histogram("grad_histogram".format(v.name)
+                                                         , g)
+                train_summary.append(grad_hist_summary)
+                # sparsity_summary = tf.summary.scalar("{}/grad/sparsity".format(v.name)
+                #                                        , tf.nn.zero_fraction(g))
+                # train_summary.append(sparsity_summary)
+        tf.summary.merge(train_summary)
+
         return tf.estimator.EstimatorSpec(
             mode=mode, loss=loss, train_op=train_op)
-
+    # summary_hook = tf.train.SummarySaverHook(
+    #     50,
+    #     output_dir='/tmp/vgg_model_scratch/sum',
+    #     summary_op=tf.summary.merge_all())
     # Add evaluation metrics (for EVAL mode)
+    tf.summary.scalar('eval_loss', loss)
     eval_metric_ops = {
         "accuracy": tf.metrics.accuracy(
             labels=labels, predictions=predictions["probabilities"])}
     return tf.estimator.EstimatorSpec(
         mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
+    # return tf.estimator.EstimatorSpec(
+    #     mode=mode, loss=loss)
 
 def load_pascal(data_dir, split='train'):
     """
@@ -226,31 +334,43 @@ def load_pascal(data_dir, split='train'):
         f_list = f.readlines()
     f_list = [x.strip('\n') for x in f_list]
     N = len(f_list)
-    # N = 300
+    # N = 1000
     # read images
-    images = np.zeros([N,H,W,3],np.float32)
-    for i in range(N):
-        # images[i,:,:,:] = tf.random_crop(
-        #                     cv2.resize(cv2.imread(data_dir
-        #                     +'/JPEGImages/'+f_list[i]+'.jpg'),(H,W),
-        #                     interpolation = cv2.INTER_CUBIC),
-        #                     [crop_px, crop_px, 3])
-        images[i,:,:,:] = Image.open(data_dir +'/JPEGImages/'+f_list[i]
-                                     +'.jpg').resize((W, H), Image.ANTIALIAS)
-    # implt = plt.imshow(images[0,:,:,:])
+
+    EVAL_STEP = 1
+    if split!='test':
+        images = np.zeros([N, H, W, 3], np.float32)
+        labels = np.zeros([N, 20]).astype(int)
+        weights = np.ones([N, 20]).astype(int)
+        for i in range(N):
+            images[i,:,:,:] = Image.open(data_dir +'/JPEGImages/'+f_list[i]
+                                         +'.jpg').resize((W, H), Image.ANTIALIAS)
+    else:
+        images = np.zeros([int(N/EVAL_STEP), H, W, 3], np.float32)
+        labels = np.zeros([int(N/EVAL_STEP), 20]).astype(int)
+        weights = np.ones([int(N/EVAL_STEP), 20]).astype(int)
+        for i in range(int(N/EVAL_STEP)):
+            print(str(i) + "/" + str(N))
+            images[i,:,:,:] = Image.open(data_dir +'/JPEGImages/'+f_list[i]
+                                         +'.jpg').resize((W, H), Image.ANTIALIAS)\
+                                                .crop((15,15,239,239))\
+                                                .resize((256, 256), Image.BILINEAR)
 
     # read class labels
-    labels = np.zeros([N,20]).astype(int)
-    weights = np.ones([N,20]).astype(int)
     for c_i in range(20):
         class_fp = data_dir+"/ImageSets/Main/" \
                             +CLASS_NAMES[c_i]+"_"+split+".txt"
         with open(class_fp) as f:
             cls_list = f.readlines()
         cls_list = [x.split() for x in cls_list]
-        for im_i in range(N):
-            labels[im_i,c_i] = int(int(cls_list[im_i][1])==1)
-            weights[im_i,c_i] = int(int(cls_list[im_i][1])!=0)
+        if split != 'test':
+            for im_i in range(N):
+                labels[im_i,c_i] = int(int(cls_list[im_i][1])==1)
+                weights[im_i,c_i] = int(int(cls_list[im_i][1])!=0)
+        else:
+            for im_i in range(int(N/EVAL_STEP)):
+                labels[im_i,c_i] = int(int(cls_list[im_i][1])==1)
+                weights[im_i,c_i] = int(int(cls_list[im_i][1])!=0)
 
     return images, labels, weights
 
@@ -277,12 +397,14 @@ def _get_el(arr, i):
 
 def main():
     BATCH_SIZE = 10
-    PASCAL_MODEL_DIR = "/tmp/alexnet_model_scratch"
+    PASCAL_MODEL_DIR = "/tmp/vgg_model_scratch"
 
     args = parse_args()
     # Load training and eval data
+    print("load eval data")
     eval_data, eval_labels, eval_weights = load_pascal(
         args.data_dir, split='test')
+    print("load train data")
     train_data, train_labels, train_weights = load_pascal(
         args.data_dir, split='trainval')
 
@@ -309,15 +431,11 @@ def main():
     iter = 100
     NUM_ITERS = int(total_iters/iter)
     mAP_writer = tf.summary.FileWriter(PASCAL_MODEL_DIR+'/train',sess.graph)
-    x = np.multiply(range(iter+1),50.0)
+    # x = np.multiply(range(iter+1),50.0)
     acc_arr = np.multiply(range(iter+1),0.0)
 
-    # center cropping
-    # N = eval_labels.shape[0]
-    eval_data = eval_data[:,16:239,16:239,:]
-
+    print("start training")
     for i in range(iter):
-        i
         pascal_classifier.train(
             steps=NUM_ITERS,
             hooks=[logging_hook],
@@ -348,7 +466,13 @@ def main():
                                                      simple_value=np.mean(AP))])
         mAP_writer.add_summary(summary, i)
 
-        acc_arr[i+1] = np.mean(AP)
+        # todo: add test loss
+        ev = pascal_classifier.evaluate(input_fn=eval_input_fn)
+        summary = tf.Summary(value=[tf.Summary.Value(tag='test_loss',
+                                                     simple_value=ev["loss"])])
+        mAP_writer.add_summary(summary, i)
+
+        # acc_arr[i+1] = np.mean(AP)
 
         print("accuracy is: ")
         print(np.mean(AP))
