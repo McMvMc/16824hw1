@@ -397,7 +397,7 @@ def _get_el(arr, i):
 
 def main():
     BATCH_SIZE = 10
-    PASCAL_MODEL_DIR = "/tmp/vgg_model_scratch"
+    PASCAL_MODEL_DIR = "/tmp/vgg_model_scratch_confirm"
 
     args = parse_args()
     # Load training and eval data
@@ -466,7 +466,7 @@ def main():
                                                      simple_value=np.mean(AP))])
         mAP_writer.add_summary(summary, i)
 
-        # todo: add test loss
+        # add test loss
         ev = pascal_classifier.evaluate(input_fn=eval_input_fn)
         summary = tf.Summary(value=[tf.Summary.Value(tag='test_loss',
                                                      simple_value=ev["loss"])])
