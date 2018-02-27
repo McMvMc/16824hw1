@@ -269,7 +269,7 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
         global_step = tf.train.get_global_step()
         decay_LR = tf.train.exponential_decay(0.001, global_step,
                                               10000, 0.5, staircase=True)
-        tf.summary.scalar('decay_LR', decay_LR)
+        tf.summary.scalar('training_loss', decay_LR)
         optimizer = tf.train.MomentumOptimizer(learning_rate=decay_LR,
                                                momentum = 0.9)
         train_op = optimizer.minimize(
@@ -334,10 +334,10 @@ def load_pascal(data_dir, split='train'):
         f_list = f.readlines()
     f_list = [x.strip('\n') for x in f_list]
     N = len(f_list)
-    # N = 1000
+    N = 1000
     # read images
 
-    EVAL_STEP = 1
+    EVAL_STEP = 10
     if split!='test':
         images = np.zeros([N, H, W, 3], np.float32)
         labels = np.zeros([N, 20]).astype(int)
@@ -396,8 +396,8 @@ def _get_el(arr, i):
 
 
 def main():
-    BATCH_SIZE = 10
-    PASCAL_MODEL_DIR = "/tmp/vgg_model_scratch_confirm"
+    BATCH_SIZE = 1
+    PASCAL_MODEL_DIR = "/tmp/vgg_model_scratch_img"
 
     args = parse_args()
     # Load training and eval data
@@ -466,7 +466,7 @@ def main():
                                                      simple_value=np.mean(AP))])
         mAP_writer.add_summary(summary, i)
 
-        # add test loss
+        # todo: add test loss
         ev = pascal_classifier.evaluate(input_fn=eval_input_fn)
         summary = tf.Summary(value=[tf.Summary.Value(tag='test_loss',
                                                      simple_value=ev["loss"])])
