@@ -13,6 +13,7 @@ from PIL import Image
 from functools import partial
 import cv2
 import matplotlib.pyplot as plt
+import os
 
 from eval import compute_map
 
@@ -44,6 +45,27 @@ CLASS_NAMES = [
 ]
 
 
+def load_pretrained_model(model_dir='vgg_16.ckpt'):
+    new_checkpoint_vars = {}
+    reader = tf.train.NewCheckpointReader(model_dir)
+    mean_rgb = reader.get_tensor('vgg_16/mean_rgb')
+    for old_name in reader.get_variable_to_shape_map():
+        variable = tf.Variable(reader.get_tensor(old_name))
+        new_name = old_name.replace('weights', 'kernel').replace('biases', 'bias')
+        if (new_name == 'vgg_16/fc6/kernel'):
+            variable = tf.Variable(tf.reshape(variable, [7 * 7 * 512, 4096]))
+        if (new_name == 'vgg_16/fc7/kernel'):
+            variable = tf.Variable(tf.reshape(variable, [4096, 4096]))
+        print(new_name)
+        new_checkpoint_vars[new_name] = variable
+    init = tf.global_variables_initializer()
+    saver = tf.train.Saver(new_checkpoint_vars)
+    if tf.train.get_global_step() == 0:
+        with tf.Session() as sess:
+            sess.run(init)
+        saver.save(sess, 'pretrained_model/new_vgg_16.ckpt')
+    return mean_rgb
+
 def cnn_model_fn(features, labels, mode, num_classes=20):
     # Write this function
     """Model function for CNN."""
@@ -53,21 +75,23 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
 
     with tf.variable_scope("input"):
         if mode == tf.estimator.ModeKeys.TRAIN:
+            # input_layer = tf.reshape(features["x"], [-1, 256, 256, 3])
             crop_layer = [tf.image.random_flip_left_right(
                 tf.image.random_flip_up_down(
                     tf.random_crop(features["x"][0, :, :, :],
-                                   [224, 224, 3])
+                                   [224, 224,3])
                 ))]
             for i in range(1, N):
                 cur_im = tf.image.random_flip_left_right(
                     tf.image.random_flip_up_down(
                         tf.random_crop(features["x"][i, :, :, :],
-                                       [224, 224, 3])
+                                       [224, 224,3])
                     ))
                 crop_layer = tf.concat([crop_layer, [cur_im]], 0)
             # crop_layer = tf.image.resize_images(crop_layer, [256, 256])
             tf.summary.image('training_images', crop_layer)
         else:
+            # input_layer = tf.reshape(features["x"], [-1, 224, 224, 3])
             crop_layer = features["x"]
             # crop_layer = tf.image.resize_images(features["x"], [256, 256])
             # crop_layer = tf.reshape(features["x"], [-1, 256, 256, 3])
@@ -248,39 +272,39 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
 
         # fully_connected(4096)
         # relu()
-        with tf.variable_scope("fc6"):
-            dense1 = tf.layers.dense(inputs=pool3_flat, units=4096,
+        # with tf.variable_scope("fc6"):
+        fc6 = tf.layers.dense(inputs=pool3_flat, units=4096,
                                      activation=tf.nn.relu, name="fc6")
 
         # dropout(0.5)
         with tf.variable_scope("dropout1"):
             dropout1 = tf.layers.dropout(
-                inputs=dense1, rate=0.5, training=mode == tf.estimator.ModeKeys.TRAIN)
+                inputs=fc6, rate=0.5, training=mode == tf.estimator.ModeKeys.TRAIN)
 
         # fully_connected(4096)
         # relu()
-        with tf.variable_scope("fc7"):
-            dense2 = tf.layers.dense(inputs=dropout1, units=4096,
+        # with tf.variable_scope("fc7"):
+        fc7 = tf.layers.dense(inputs=dropout1, units=4096,
                                      activation=tf.nn.relu, name="fc7")
 
         # dropout(0.5)
         with tf.variable_scope("dropout2"):
             dropout2 = tf.layers.dropout(
-                inputs=dense2, rate=0.5, training=mode == tf.estimator.ModeKeys.TRAIN)
+                inputs=fc7, rate=0.5, training=mode == tf.estimator.ModeKeys.TRAIN)
 
         # fully_connected(20)
         # Logits Layer
-        with tf.variable_scope("fc8"):
-            logits = tf.layers.dense(kernel_initializer=tf.contrib.layers.xavier_initializer(),
+        # with tf.variable_scope("fc8"):
+        fc8 = tf.layers.dense(kernel_initializer=tf.random_normal_initializer(mean=0.0, stddev=0.01),
                                     bias_initializer=tf.zeros_initializer(),
                                     inputs=dropout2, units=20, name="fc8")
 
     predictions = {
         # Generate predictions (for PREDICT and EVAL mode)
-        "classes": tf.argmax(input=logits, axis=1),
+        "classes": tf.argmax(input=fc8, axis=1),
         # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
         # `logging_hook`.
-        "probabilities": tf.sigmoid(logits, name="sigmoid_tensor")
+        "probabilities": tf.sigmoid(fc8, name="sigmoid_tensor")
     }
 
     if mode == tf.estimator.ModeKeys.PREDICT:
@@ -290,14 +314,21 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
     # onehot_labels = tf.one_hot(indices=tf.cast(labels, tf.int32), depth=10)
     onehot_labels = labels
     loss = tf.identity(tf.losses.sigmoid_cross_entropy(
-        multi_class_labels=onehot_labels, logits=logits), name='loss')
+        multi_class_labels=onehot_labels, logits=fc8), name='loss')
 
     # Configure the Training Op (for TRAIN mode)
     if mode == tf.estimator.ModeKeys.TRAIN:
         global_step = tf.train.get_global_step()
 
+        variables_to_restore = tf.contrib.framework.get_trainable_variables()
+        variables_to_restore = variables_to_restore[:-2]
+        # embed()
+        scopes = {os.path.dirname(v.name) for v in variables_to_restore}
+        tf.train.init_from_checkpoint("pretrained_model/new_vgg_16.ckpt", {s + '/': s + '/' for s in scopes})
+
+
         tf.summary.scalar('training_loss', loss)
-        decay_LR = tf.train.exponential_decay(0.0001, global_step,
+        decay_LR = tf.train.exponential_decay(0.001, global_step,
                                               1000, 0.5, staircase=True)
         tf.summary.scalar('decay_LR', decay_LR)
         optimizer = tf.train.MomentumOptimizer(learning_rate=decay_LR,
@@ -322,7 +353,7 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
         tf.summary.merge(train_summary)
 
         return tf.estimator.EstimatorSpec(
-            mode=mode, loss=loss, train_op=train_op, training_hooks=[RestoreHook()])
+            mode=mode, loss=loss, train_op=train_op)
 
     # EVAL mode
     tf.summary.scalar('eval_loss', loss)
@@ -333,7 +364,6 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
         mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
     # return tf.estimator.EstimatorSpec(
     #     mode=mode, loss=loss)
-
 
 def load_pascal(data_dir, split='train'):
     """
@@ -362,11 +392,11 @@ def load_pascal(data_dir, split='train'):
         f_list = f.readlines()
     f_list = [x.strip('\n') for x in f_list]
     N = len(f_list)
-    N = 800
+    # N = 800
     # read images
 
     EVAL_STEP = 1
-    if split != 'test':
+    if split == 'train':
         images = np.zeros([N, H, W, 3], np.float32)
         labels = np.zeros([N, 20]).astype(int)
         weights = np.ones([N, 20]).astype(int)
@@ -422,24 +452,31 @@ def _get_el(arr, i):
         return arr
 
 
-class RestoreHook(tf.train.SessionRunHook):
+# class RestoreHook(tf.train.SessionRunHook):
     # def __init__(self, init_fn):
     #     self.init_fn = init_fn
 
-    def after_create_session(self, session, coord=None):
+    # def before_run(self, run_context):
         # if session.run(tf.train.get_or_create_global_step()) == 0:
         #     self.init_fn(session)
         # if session.run(tf.train.get_or_create_global_step()) == 0:
             # self.init_fn(session)
-        model_path = "vgg_16.ckpt"
-        # restore data
-        layers_to_restore = tf.trainable_variables()
-        layers_to_restore = layers_to_restore[:-2]
-
-        scopes = [layer.name for layer in layers_to_restore]
-        tf.train.init_from_checkpoint(model_path, {s.replace("kernel", "weights") + '/': s
-                                                                     + '/' for s in scopes})
-
+        # model_path = "vgg_16.ckpt"
+        # # restore data
+        # layers_to_restore = tf.trainable_variables()
+        # # layers_to_restore = layers_to_restore[:-2]
+        #
+        # scopes = []
+        # for layer in layers_to_restore:
+        #     if (("kernel" in layer.name) or ("bias" in layer.name)) \
+        #             and ("Momentum" not in layer.name):
+        #         scopes = np.append(scopes, [layer.name])
+        #
+        # tf.train.init_from_checkpoint(model_path,
+        #                               {s.split(':')[0].replace("kernel", "weights")
+        #                                 .replace("bias", "biases")
+        #                                + '/': s.split(':')[0] + '/' for s in scopes})
+        # print("reloaded weights")
 
 def main():
     BATCH_SIZE = 10
@@ -449,11 +486,12 @@ def main():
     # Load training and eval data
     print("load eval data")
     eval_data, eval_labels, eval_weights = load_pascal(
-        args.data_dir, split='test')
+        args.data_dir, split='val')
     print("load train data")
     train_data, train_labels, train_weights = load_pascal(
-        args.data_dir, split='trainval')
+        args.data_dir, split='train')
 
+    model_path = "vgg_16.ckpt"
     pascal_classifier = tf.estimator.Estimator(
         model_fn=partial(cnn_model_fn,
                          num_classes=train_labels.shape[1]),
@@ -480,9 +518,12 @@ def main():
     mAP_writer = tf.summary.FileWriter(PASCAL_MODEL_DIR + '/train', sess.graph)
     # x = np.multiply(range(iter+1),50.0)
     acc_arr = np.multiply(range(iter + 1), 0.0)
-
+    mean_rgb = load_pretrained_model(model_path)
+    train_data -= mean_rgb
+    eval_data -= mean_rgb
     print("start training")
     for i in range(iter):
+        load_pretrained_model(model_path)
         pascal_classifier.train(
             steps=NUM_ITERS,
             hooks=[logging_hook],
