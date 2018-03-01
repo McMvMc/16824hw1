@@ -45,27 +45,6 @@ CLASS_NAMES = [
 ]
 
 
-def load_pretrained_model(model_dir='vgg_16.ckpt'):
-    new_checkpoint_vars = {}
-    reader = tf.train.NewCheckpointReader(model_dir)
-    mean_rgb = reader.get_tensor('vgg_16/mean_rgb')
-    for old_name in reader.get_variable_to_shape_map():
-        variable = tf.Variable(reader.get_tensor(old_name))
-        new_name = old_name.replace('weights', 'kernel').replace('biases', 'bias')
-        if (new_name == 'vgg_16/fc6/kernel'):
-            variable = tf.Variable(tf.reshape(variable, [7 * 7 * 512, 4096]))
-        if (new_name == 'vgg_16/fc7/kernel'):
-            variable = tf.Variable(tf.reshape(variable, [4096, 4096]))
-        print(new_name)
-        new_checkpoint_vars[new_name] = variable
-    init = tf.global_variables_initializer()
-    saver = tf.train.Saver(new_checkpoint_vars)
-    if tf.train.get_global_step() == 0:
-        with tf.Session() as sess:
-            sess.run(init)
-        saver.save(sess, 'pretrained_model/new_vgg_16.ckpt')
-    return mean_rgb
-
 def cnn_model_fn(features, labels, mode, num_classes=20):
     # Write this function
     """Model function for CNN."""
@@ -324,7 +303,7 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
         variables_to_restore = variables_to_restore[:-2]
         # embed()
         scopes = {os.path.dirname(v.name) for v in variables_to_restore}
-        tf.train.init_from_checkpoint("pretrained_model/new_vgg_16.ckpt", {s + '/': s + '/' for s in scopes})
+        tf.train.init_from_checkpoint("my_model/new_vgg_16.ckpt", {s + '/': s + '/' for s in scopes})
 
 
         tf.summary.scalar('training_loss', loss)
@@ -451,6 +430,25 @@ def _get_el(arr, i):
     except IndexError:
         return arr
 
+def make_my_model(model_dir):
+    my_model = {}
+    reader = tf.train.NewCheckpointReader(model_dir)
+    mean_rgb = reader.get_tensor("vgg_16/mean_rgb")
+    for old_name in reader.get_variable_to_shape_map():
+        variable = tf.Variable(reader.get_tensor(old_name))
+        new_name = old_name.replace("weights", "kernel").replace("biases", "bias")
+        if (new_name == "vgg_16/fc6/kernel"):
+            variable = tf.Variable(tf.reshape(variable, [7 * 7 * 512, 4096]))
+        elif (new_name == "vgg_16/fc7/kernel"):
+            variable = tf.Variable(tf.reshape(variable, [4096, 4096]))
+        my_model[new_name] = variable
+
+    saver = tf.train.Saver(my_model)
+    # if tf.train.get_global_step() == 0:
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+    saver.save(sess, 'my_model/new_vgg_16.ckpt')
+    return mean_rgb
 
 # class RestoreHook(tf.train.SessionRunHook):
     # def __init__(self, init_fn):
@@ -518,12 +516,12 @@ def main():
     mAP_writer = tf.summary.FileWriter(PASCAL_MODEL_DIR + '/train', sess.graph)
     # x = np.multiply(range(iter+1),50.0)
     acc_arr = np.multiply(range(iter + 1), 0.0)
-    mean_rgb = load_pretrained_model(model_path)
+    mean_rgb = make_my_model(model_path)
     train_data -= mean_rgb
     eval_data -= mean_rgb
     print("start training")
     for i in range(iter):
-        load_pretrained_model(model_path)
+        # make_my_model(model_path)
         pascal_classifier.train(
             steps=NUM_ITERS,
             hooks=[logging_hook],
