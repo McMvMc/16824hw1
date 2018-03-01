@@ -42,16 +42,7 @@ CLASS_NAMES = [
     'tvmonitor',
 ]
 
-def put_kernels_on_grid (kernel):
-
-    '''Visualize conv. filters as an image (mostly for the 1st layer).
-    Arranges filters into a grid, with some paddings between adjacent filters.
-    Args:
-    kernel:            tensor of shape [Y, X, NumChannels, NumKernels]
-    pad:               number of black pixels around each filter (between them)
-    Return:
-    Tensor of shape [1, (Y+2*pad)*grid_Y, (X+2*pad)*grid_X, NumChannels].
-    '''
+def weight_2_grid(kernel):
 
     n = kernel.get_shape().as_list()[3]
     grid_Y = int(np.ceil(sqrt(n)))
@@ -64,12 +55,8 @@ def put_kernels_on_grid (kernel):
     max_val = tf.reduce_max(kernel)
     kernel = (kernel-min_val)/(max_val-min_val)
 
-    # pad X and Y
-    # x = tf.pad(kernel, tf.constant( [[1,1],[1, 1],[0,0],[0,0]] ), mode = 'CONSTANT')
-
-    # X and Y dimensions, w.r.t. padding
-    Y = kernel.get_shape().as_list()[0]   # + 2 * pad
-    X = kernel.get_shape().as_list()[1]   # + 2 * pad
+    Y = kernel.get_shape().as_list()[0]
+    X = kernel.get_shape().as_list()[1]
 
     n_chan = 3
 
@@ -78,21 +65,13 @@ def put_kernels_on_grid (kernel):
         x = tf.concat([x,tf.transpose(
                             [tf.zeros([Y,X,n_chan])], (1, 2, 3, 0))],3)
 
-    # put NumKernels to the 1st dimension
     x = tf.transpose(x, (3, 0, 1, 2))
-    # organize grid on Y axis
     x = tf.reshape(x, tf.stack([grid_X, Y * grid_Y, X, n_chan]))
 
-    # switch X and Y axes
     x = tf.transpose(x, (0, 2, 1, 3))
-    # organize grid on X axis
     x = tf.reshape(x, tf.stack([1, X * grid_X, Y * grid_Y, n_chan]))
 
-    # back to normal order (not combining with the next step for clarity)
     x = tf.transpose(x, (2, 1, 3, 0))
-
-    # to tf.image_summary order [batch_size, height, width, channels],
-    #   where in this case batch_size == 1
     x = tf.transpose(x, (3, 0, 1, 2))
 
     return x
@@ -137,7 +116,7 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
 
         scope.reuse_variables()
         weights = tf.get_variable('conv2d/kernel')
-        tf.summary.image('conv1/weghts', put_kernels_on_grid(weights))
+        tf.summary.image('conv1/weghts', weight_2_grid(weights))
 
     # max_pool(3, 2)
     pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[3, 3], strides=2)

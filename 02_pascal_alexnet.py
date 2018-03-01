@@ -61,9 +61,10 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
                                     tf.random_crop(features["x"][i, :, :, :],
                                                    [224, 224, 3])
                         ))]], 0)
-        crop_layer = tf.image.resize_images(crop_layer, [256, 256])
+        # crop_layer = tf.image.resize_images(crop_layer, [256, 256])
     else:
-        crop_layer = tf.image.resize_images(features["x"], [256,256])
+        crop_layer = features["x"]
+        # crop_layer = tf.image.resize_images(features["x"], [256,256])
 
     # conv(k, s, n, p)
     # conv(11, 4, 96, 'VALID')
@@ -136,7 +137,7 @@ def cnn_model_fn(features, labels, mode, num_classes=20):
     pool3 = tf.layers.max_pooling2d(inputs=conv5, pool_size=[3, 3], strides=2)
 
     # flatten()
-    pool3_flat = tf.reshape(pool3, [-1, 6*6*256])
+    pool3_flat = tf.reshape(pool3, [-1, 5*5*256])
     # pool3_flat = tf.reshape(pool3, [int((labels.shape)[0]), -1])
 
     # fully_connected(4096)
@@ -221,36 +222,47 @@ def load_pascal(data_dir, split='train'):
     H = 256
     W = 256
     crop_px = 224
-    fp = data_dir+"/ImageSets/Main/"+split+".txt"
+    fp = data_dir + "/ImageSets/Main/" + split + ".txt"
     with open(fp) as f:
         f_list = f.readlines()
     f_list = [x.strip('\n') for x in f_list]
     N = len(f_list)
-    # N = 300
+    # N = 800
     # read images
-    images = np.zeros([N,H,W,3],np.float32)
-    for i in range(N):
-        # images[i,:,:,:] = tf.random_crop(
-        #                     cv2.resize(cv2.imread(data_dir
-        #                     +'/JPEGImages/'+f_list[i]+'.jpg'),(H,W),
-        #                     interpolation = cv2.INTER_CUBIC),
-        #                     [crop_px, crop_px, 3])
-        images[i,:,:,:] = Image.open(data_dir +'/JPEGImages/'+f_list[i]
-                                     +'.jpg').resize((W, H), Image.ANTIALIAS)
-    # implt = plt.imshow(images[0,:,:,:])
+
+    EVAL_STEP = 1
+    if split == 'train':
+        images = np.zeros([N, H, W, 3], np.float32)
+        labels = np.zeros([N, 20]).astype(int)
+        weights = np.ones([N, 20]).astype(int)
+        for i in range(N):
+            images[i, :, :, :] = Image.open(data_dir + '/JPEGImages/' + f_list[i]
+                                            + '.jpg').resize((W, H), Image.ANTIALIAS)
+    else:
+        images = np.zeros([int(N / EVAL_STEP), 224, 224, 3], np.float32)
+        labels = np.zeros([int(N / EVAL_STEP), 20]).astype(int)
+        weights = np.ones([int(N / EVAL_STEP), 20]).astype(int)
+        for i in range(int(N / EVAL_STEP)):
+            print(str(i) + "/" + str(N))
+            images[i, :, :, :] = Image.open(data_dir +'/JPEGImages/'+f_list[i]
+                                         +'.jpg').resize((W, H), Image.ANTIALIAS)\
+                                                .crop((15,15,239,239))
 
     # read class labels
-    labels = np.zeros([N,20]).astype(int)
-    weights = np.ones([N,20]).astype(int)
     for c_i in range(20):
-        class_fp = data_dir+"/ImageSets/Main/" \
-                            +CLASS_NAMES[c_i]+"_"+split+".txt"
+        class_fp = data_dir + "/ImageSets/Main/" \
+                   + CLASS_NAMES[c_i] + "_" + split + ".txt"
         with open(class_fp) as f:
             cls_list = f.readlines()
         cls_list = [x.split() for x in cls_list]
-        for im_i in range(N):
-            labels[im_i,c_i] = int(int(cls_list[im_i][1])==1)
-            weights[im_i,c_i] = int(int(cls_list[im_i][1])!=0)
+        if split != 'test':
+            for im_i in range(N):
+                labels[im_i, c_i] = int(int(cls_list[im_i][1]) == 1)
+                weights[im_i, c_i] = int(int(cls_list[im_i][1]) != 0)
+        else:
+            for im_i in range(int(N / EVAL_STEP)):
+                labels[im_i, c_i] = int(int(cls_list[im_i][1]) == 1)
+                weights[im_i, c_i] = int(int(cls_list[im_i][1]) != 0)
 
     return images, labels, weights
 
