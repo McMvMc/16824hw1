@@ -455,6 +455,15 @@ def read_mean_rgb(model_dir):
                         .get_tensor("vgg_16/mean_rgb")
     return mean_rgb
 
+def activation_2_grid(activations, px, r, c):
+    image = np.zeros((px*r,px*c),dtype=np.float32)
+    max = np.amax(activations)
+    for y in range(r):
+        for x in range(c):
+            image[y*px:(y+1)*px ,x*px:(x+1)*px] = activations[:,:,x+y*c]
+
+    return image/max
+
 def main():
     VGG_DIR = "/tmp/05_nn_vgg"
     ALEX_DIR = "/tmp/05_nn_alex"
@@ -499,17 +508,162 @@ def main():
         num_epochs=1,
         shuffle=False)
 
+    N = eval_labels.shape[0]
 
     # VGG eval
-    ref_vgg = list(vgg_classifier.predict(input_fn=eval_input_fn_ref))
-    pred_vgg = list(vgg_classifier.predict(input_fn=eval_input_fn_vgg))
-    for i in range(10):
-        
-
+    # ref_vgg = list(vgg_classifier.predict(input_fn=eval_input_fn_ref))
+    # pred_vgg = list(vgg_classifier.predict(input_fn=eval_input_fn_vgg))
+    # nn_vgg_fc = np.zeros([10]).astype(int)
+    # nn_vgg_pool = np.zeros([10]).astype(int)
+    # inf = float('inf')
+    # for ref_i in range(10):
+    #     min_fc = inf
+    #     min_pool = inf
+    #     cur_ref_fc7 = ref_vgg[ref_i]['fc7']
+    #     cur_ref_pool = ref_vgg[ref_i]['pool5']
+    #     for i in range(1,N):
+    #         cur_fc7 = pred_vgg[i]['fc7']
+    #         cur_dist_fc = np.linalg.norm(cur_ref_fc7-cur_fc7)
+    #         if cur_dist_fc < min_fc:
+    #             nn_vgg_fc[ref_i] = i
+    #             min_fc = cur_dist_fc
+    #         cur_pool = pred_vgg[i]['pool5']
+    #         cur_dist_pool = np.linalg.norm(cur_ref_pool - cur_pool)
+    #         if cur_dist_pool < min_pool:
+    #             nn_vgg_pool[ref_i] = i
+    #             min_pool = cur_dist_pool
+    #
+    # # w = 10
+    # # h = 10
+    # fc_fig = plt.figure(1)
+    # fc_fig.suptitle("vgg fc+reference response", fontsize=16)
+    # plt.show()
+    # pool_fig = plt.figure(2)
+    # pool_fig.suptitle("vgg pooling+reference response", fontsize=16)
+    # plt.show()
+    # nn_fig = plt.figure(3)
+    # nn_fig.suptitle("vgg nearest neighbors+reference", fontsize=16)
+    # plt.show()
+    # columns = 8
+    # rows = 3
+    # for i in range(10):
+    #     plt.figure(1)
+    #     nn_fc = nn_vgg_fc[i]
+    #     nn_pool = nn_vgg_pool[i]
+    #     fc_img = Image.fromarray(np.reshape(
+    #         pred_vgg[nn_fc]['fc7']/np.amax(pred_vgg[nn_fc]['fc7'])*255,
+    #                                         (64, 64)))
+    #     fc_img_ref = Image.fromarray(np.reshape(
+    #         ref_vgg[i]['fc7']/np.amax(ref_vgg[i]['fc7'])*255,
+    #                                         (64, 64)))
+    #     ax = fc_fig.add_subplot(rows, columns, i*2+1)
+    #     ax.set_title(CLASS_NAMES[i])
+    #     plt.imshow(fc_img)
+    #     ax = fc_fig.add_subplot(rows, columns, i*2+2)
+    #     ax.set_title("REF: " + CLASS_NAMES[i])
+    #     plt.imshow(fc_img_ref)
+    #
+    #     plt.figure(2)
+    #     pool_img = activation_2_grid(pred_vgg[nn_pool]['pool5'], 7, 16, 32)
+    #     pool_img_ref = activation_2_grid(ref_vgg[i]['pool5'], 7, 16, 32)
+    #     ax = pool_fig.add_subplot(rows, columns, i*2+1)
+    #     ax.set_title(CLASS_NAMES[i])
+    #     plt.imshow(pool_img)
+    #     ax = pool_fig.add_subplot(rows, columns, i*2+2)
+    #     ax.set_title("REF: " + CLASS_NAMES[i])
+    #     plt.imshow(pool_img_ref)
+    #
+    #     plt.figure(3)
+    #     ax = nn_fig.add_subplot(4, 10, i*2 + 1)
+    #     ax.set_title("FC: " + CLASS_NAMES[i])
+    #     plt.imshow(Image.fromarray(eval_data[nn_vgg_fc[i]].astype(np.uint8)))
+    #     ax = nn_fig.add_subplot(4, 10, i*2 + 2)
+    #     ax.set_title("REF: " + CLASS_NAMES[i])
+    #     plt.imshow(Image.fromarray(ref_data[i].astype(np.uint8)))
+    #
+    #     ax = nn_fig.add_subplot(4, 10, i*2 + 1 + 20)
+    #     ax.set_title("POOLING: " + CLASS_NAMES[i])
+    #     plt.imshow(Image.fromarray(eval_data[nn_vgg_pool[i]].astype(np.uint8)))
+    #     ax = nn_fig.add_subplot(4, 10, i*2 + 2 + 20)
+    #     ax.set_title("REF: " + CLASS_NAMES[i])
+    #     plt.imshow(Image.fromarray(ref_data[i].astype(np.uint8)))
+    #
+    #
     # ALEX eval
     ref_alex = list(alex_classifier.predict(input_fn=eval_input_fn_ref))
     pred_alex = list(alex_classifier.predict(input_fn=eval_input_fn_alex))
+    nn_alex_fc = np.zeros([10]).astype(int)
+    nn_alex_pool = np.zeros([10]).astype(int)
+    inf = float('inf')
+    for ref_i in range(10):
+        min_fc = inf
+        min_pool = inf
+        cur_ref_fc7 = ref_alex[ref_i]['fc7']
+        cur_ref_pool = ref_alex[ref_i]['pool5']
+        for i in range(1,N):
+            cur_fc7 = pred_alex[i]['fc7']
+            cur_dist_fc = np.linalg.norm(cur_ref_fc7-cur_fc7)
+            if cur_dist_fc < min_fc:
+                nn_alex_fc[ref_i] = i
+                min_fc = cur_dist_fc
+            cur_pool = pred_alex[i]['pool5']
+            cur_dist_pool = np.linalg.norm(cur_ref_pool - cur_pool)
+            if cur_dist_pool < min_pool:
+                nn_alex_pool[ref_i] = i
+                min_pool = cur_dist_pool
 
+    fc_fig = plt.figure(4)
+    fc_fig.suptitle("alex fc+reference response", fontsize=16)
+    plt.show()
+    pool_fig = plt.figure(5)
+    pool_fig.suptitle("alex pooling+reference response", fontsize=16)
+    plt.show()
+    nn_fig = plt.figure(6)
+    nn_fig.suptitle("alex nearest neighbors+reference", fontsize=16)
+    plt.show()
+    columns = 8
+    rows = 3
+    for i in range(10):
+        plt.figure(4)
+        nn_fc = nn_alex_fc[i]
+        nn_pool = nn_alex_pool[i]
+        fc_img = Image.fromarray(np.reshape(
+            pred_alex[nn_fc]['fc7']/np.amax(pred_alex[nn_fc]['fc7'])*255,
+                                            (64, 64)))
+        fc_img_ref = Image.fromarray(np.reshape(
+            ref_alex[i]['fc7']/np.amax(ref_alex[i]['fc7'])*255,
+                                            (64, 64)))
+        ax = fc_fig.add_subplot(rows, columns, i*2+1)
+        ax.set_title(CLASS_NAMES[i])
+        plt.imshow(fc_img)
+        ax = fc_fig.add_subplot(rows, columns, i*2+2)
+        ax.set_title("REF: " + CLASS_NAMES[i])
+        plt.imshow(fc_img_ref)
+
+        plt.figure(5)
+        pool_img = activation_2_grid(pred_alex[nn_pool]['pool5'], 5, 16, 16)
+        pool_img_ref = activation_2_grid(ref_alex[i]['pool5'], 5, 16,16)
+        ax = pool_fig.add_subplot(rows, columns, i*2+1)
+        ax.set_title(CLASS_NAMES[i])
+        plt.imshow(pool_img)
+        ax = pool_fig.add_subplot(rows, columns, i*2+2)
+        ax.set_title("REF: " + CLASS_NAMES[i])
+        plt.imshow(pool_img_ref)
+
+        plt.figure(6)
+        ax = nn_fig.add_subplot(4, 10, i*2 + 1)
+        ax.set_title("FC: " + CLASS_NAMES[i])
+        plt.imshow(Image.fromarray(eval_data[nn_alex_fc[i]].astype(np.uint8)))
+        ax = nn_fig.add_subplot(4, 10, i*2 + 2)
+        ax.set_title("REF: " + CLASS_NAMES[i])
+        plt.imshow(Image.fromarray(ref_data[i].astype(np.uint8)))
+
+        ax = nn_fig.add_subplot(4, 10, i*2 + 1 + 20)
+        ax.set_title("POOLING: " + CLASS_NAMES[i])
+        plt.imshow(Image.fromarray(eval_data[nn_alex_pool[i]].astype(np.uint8)))
+        ax = nn_fig.add_subplot(4, 10, i*2 + 2 + 20)
+        ax.set_title("REF: " + CLASS_NAMES[i])
+        plt.imshow(Image.fromarray(ref_data[i].astype(np.uint8)))
 
     return
 if __name__ == "__main__":

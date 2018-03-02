@@ -444,10 +444,10 @@ def make_my_model(model_dir):
         my_model[new_name] = variable
 
     saver = tf.train.Saver(my_model)
-    # if tf.train.get_global_step() == 0:
-    with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
-    saver.save(sess, 'my_model/new_vgg_16.ckpt')
+    if tf.train.get_global_step() == 0:
+        with tf.Session() as sess:
+            sess.run(tf.global_variables_initializer())
+        saver.save(sess, 'my_model/new_vgg_16.ckpt')
     return mean_rgb
 
 # class RestoreHook(tf.train.SessionRunHook):
@@ -521,7 +521,7 @@ def main():
     eval_data -= mean_rgb
     print("start training")
     for i in range(iter):
-        # make_my_model(model_path)
+        make_my_model(model_path)
         pascal_classifier.train(
             steps=NUM_ITERS,
             hooks=[logging_hook],
